@@ -114,12 +114,9 @@ def recurse_accounts(
             try:
                 pubkey_var = const_accs[acc_idx]
             except KeyError:
-                try:
-                    pubkey_var = CONST_ACCOUNTS[names[-1]]
-                except KeyError:
-                    nested_keys = [f'["{key}"]' for key in names]
-                    dict_accessor = "".join(nested_keys)
-                    pubkey_var = f"accounts{dict_accessor}"
+                nested_keys = [f'["{key}"]' for key in names]
+                dict_accessor = "".join(nested_keys)
+                pubkey_var = f"accounts{dict_accessor}"
             if acc.is_optional:
                 elements.append(
                     f"AccountMeta(pubkey={pubkey_var}, "
@@ -223,13 +220,10 @@ def gen_accounts(
                     }
                     pda_generated = True
             if not pda_generated:
-                try:
-                    CONST_ACCOUNTS[acc_name]
-                except KeyError:
-                    if acc.is_optional:
-                        params.append(TypedParam(acc_name, "typing.Optional[Pubkey]"))
-                    else:
-                        params.append(TypedParam(acc_name, "Pubkey"))
+                if acc.is_optional:
+                    params.append(TypedParam(acc_name, "typing.Optional[Pubkey]"))
+                else:
+                    params.append(TypedParam(acc_name, "Pubkey"))
     maybe_typed_dict_container = [TypedDict(name, params)] if params else []
     accounts = maybe_typed_dict_container + extra_typeddicts_to_use
     return accounts, accum_const_pdas + const_pdas, const_acc_indices, acc_count
