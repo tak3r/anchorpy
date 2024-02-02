@@ -5,6 +5,7 @@ from typing import Optional, cast
 
 import typer
 from anchorpy_core.idl import Idl
+
 from IPython import embed
 
 from anchorpy import create_workspace
@@ -13,7 +14,9 @@ from anchorpy.clientgen.errors import gen_errors
 from anchorpy.clientgen.instructions import gen_instructions
 from anchorpy.clientgen.program_id import gen_program_id
 from anchorpy.clientgen.types import gen_types
+from anchorpy.idl import _from_json
 from anchorpy.template import INIT_TESTS
+
 
 app = typer.Typer()
 
@@ -106,7 +109,14 @@ def client_gen(
     ),
 ):
     """Generate Python client code from the specified anchor IDL."""
-    idl_obj = Idl.from_json(idl.read_text())
+    discriminants = {}
+    is_anchor = True
+    try:
+        idl_obj = Idl.from_json(idl.read_text())
+    except:
+        # non anchor idl
+        is_anchor = False
+        idl_obj, discriminants = _from_json(idl.read_text())
     if program_id is None:
         idl_metadata = idl_obj.metadata
         address_from_idl = (
@@ -131,11 +141,11 @@ def client_gen(
     typer.echo("generating errors.py...")
     gen_errors(idl_obj, out)
     typer.echo("generating instructions...")
-    gen_instructions(idl_obj, out, pdas)
+    gen_instructions(idl_obj, out, pdas, discriminants)
     typer.echo("generating types...")
     gen_types(idl_obj, out)
     typer.echo("generating accounts...")
-    gen_accounts(idl_obj, out)
+    gen_accounts(idl_obj, out, is_anchor)
 
 
 if __name__ == "__main__":

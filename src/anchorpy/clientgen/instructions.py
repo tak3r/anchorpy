@@ -53,11 +53,11 @@ CONST_ACCOUNTS = {
 }
 
 
-def gen_instructions(idl: Idl, root: Path, gen_pdas: bool) -> None:
+def gen_instructions(idl: Idl, root: Path, gen_pdas: bool, discriminants: {}) -> None:
     instructions_dir = root / "instructions"
     instructions_dir.mkdir(exist_ok=True)
     gen_index_file(idl, instructions_dir)
-    instructions = gen_instructions_code(idl, instructions_dir, gen_pdas)
+    instructions = gen_instructions_code(idl, instructions_dir, gen_pdas, discriminants)
     for path, code in instructions.items():
         formatted = format_str(code, mode=FileMode())
         fixed = fix_code(formatted, remove_all_unused_imports=True)
@@ -229,7 +229,9 @@ def gen_accounts(
     return accounts, accum_const_pdas + const_pdas, const_acc_indices, acc_count
 
 
-def gen_instructions_code(idl: Idl, out: Path, gen_pdas: bool) -> dict[Path, str]:
+def gen_instructions_code(
+    idl: Idl, out: Path, gen_pdas: bool, discriminants: {}
+) -> dict[Path, str]:
     types_import = [FromImport("..", ["types"])] if idl.types else []
     imports = [
         ANNOTATIONS_IMPORT,
@@ -317,6 +319,8 @@ def gen_instructions_code(idl: Idl, out: Path, gen_pdas: bool) -> dict[Path, str
         identifier_assignment = Assign(
             "identifier", _sighash(ix_name_snake_unsanitized)
         )
+        if ix.name in discriminants:
+            identifier_assignment = Assign("identifier", discriminants[ix.name])
         encoded_args_assignment = Assign("encoded_args", encoded_args_val)
         data_assignment = Assign("data", "identifier + encoded_args")
         returning = Return("Instruction(program_id, data, keys)")

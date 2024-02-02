@@ -49,14 +49,14 @@ from anchorpy.clientgen.genpy_extension import (
 from anchorpy.coder.accounts import _account_discriminator
 
 
-def gen_accounts(idl: Idl, root: Path) -> None:
+def gen_accounts(idl: Idl, root: Path, is_anchor: bool = True) -> None:
     accounts = idl.accounts
     if accounts is None or not accounts:
         return
     accounts_dir = root / "accounts"
     accounts_dir.mkdir(exist_ok=True)
     gen_index_file(idl, accounts_dir)
-    accounts_dict = gen_accounts_code(idl, accounts_dir)
+    accounts_dict = gen_accounts_code(idl, accounts_dir, is_anchor)
     for path, code in accounts_dict.items():
         formatted = format_str(code, mode=FileMode())
         fixed = fix_code(formatted, remove_all_unused_imports=True)
@@ -82,17 +82,17 @@ def gen_index_code(idl: Idl) -> str:
     return str(Collection(imports))
 
 
-def gen_accounts_code(idl: Idl, accounts_dir: Path) -> dict[Path, str]:
+def gen_accounts_code(idl: Idl, accounts_dir: Path, is_anchor: bool) -> dict[Path, str]:
     res = {}
     for acc in idl.accounts:
         filename = f"{_sanitize(snake(acc.name))}.py"
         path = accounts_dir / filename
-        code = gen_account_code(acc, idl)
+        code = gen_account_code(acc, idl, is_anchor)
         res[path] = code
     return res
 
 
-def gen_account_code(acc: IdlTypeDefinition, idl: Idl) -> str:
+def gen_account_code(acc: IdlTypeDefinition, idl: Idl, is_anchor: bool) -> str:
     base_imports = [
         Import("typing"),
         FromImport("dataclasses", ["dataclass"]),
@@ -101,14 +101,18 @@ def gen_account_code(acc: IdlTypeDefinition, idl: Idl) -> str:
         FromImport("solana.rpc.async_api", ["AsyncClient"]),
         FromImport("solana.rpc.commitment", ["Commitment"]),
         ImportAs("borsh_construct", "borsh"),
-        FromImport("anchorpy.coder.accounts", ["ACCOUNT_DISCRIMINATOR_SIZE"]),
-        FromImport("anchorpy.error", ["AccountInvalidDiscriminator"]),
         FromImport("anchorpy.utils.rpc", ["get_multiple_accounts"]),
         FromImport(
             "anchorpy.borsh_extension", ["BorshPubkey", "EnumForCodegen", "COption"]
         ),
         FromImport("..program_id", ["PROGRAM_ID"]),
     ]
+
+    if is_anchor:
+        base_imports.append(
+            FromImport("anchorpy.coder.accounts", ["ACCOUNT_DISCRIMINATOR_SIZE"]),
+            FromImport("anchorpy.error", ["AccountInvalidDiscriminator"]),
+        )
     imports = (
         [*base_imports, FromImport("..", ["types"])] if idl.types else base_imports
     )
@@ -250,26 +254,39 @@ def gen_account_code(acc: IdlTypeDefinition, idl: Idl) -> str:
         is_async=True,
     )
     decode_body_end = Call("cls", decode_body_entries)
-    account_invalid_raise = Raise(
-        'AccountInvalidDiscriminator("The discriminator for this account is invalid")'
-    )
-    decode_method = ClassMethod(
-        "decode",
-        [TypedParam("data", "bytes")],
-        Suite(
-            [
-                If(
-                    "data[:ACCOUNT_DISCRIMINATOR_SIZE] != cls.discriminator",
-                    account_invalid_raise,
-                ),
-                Assign(
-                    "dec", f"{name}.layout.parse(data[ACCOUNT_DISCRIMINATOR_SIZE:])"
-                ),
-                Return(decode_body_end),
-            ]
-        ),
-        f'"{name}"',
-    )
+    if is_anchor:
+        account_invalid_raise = Raise(
+            'AccountInvalidDiscriminator("The discriminator for this account is invalid")'
+        )
+        decode_method = ClassMethod(
+            "decode",
+            [TypedParam("data", "bytes")],
+            Suite(
+                [
+                    If(
+                        "data[:ACCOUNT_DISCRIMINATOR_SIZE] != cls.discriminator",
+                        account_invalid_raise,
+                    ),
+                    Assign(
+                        "dec", f"{name}.layout.parse(data[ACCOUNT_DISCRIMINATOR_SIZE:])"
+                    ),
+                    Return(decode_body_end),
+                ]
+            ),
+            f'"{name}"',
+        )
+    else:
+        decode_method = ClassMethod(
+            "decode",
+            [TypedParam("data", "bytes")],
+            Suite(
+                [
+                    Assign("dec", f"{name}.layout.parse(data)"),
+                    Return(decode_body_end),
+                ]
+            ),
+            f'"{name}"',
+        )
     to_json_body = StrDict(to_json_entries)
     to_json_method = Method("to_json", [], Return(to_json_body), json_interface_name)
     from_json_body = Call("cls", from_json_entries)
@@ -279,10 +296,15 @@ def gen_account_code(acc: IdlTypeDefinition, idl: Idl) -> str:
         Return(from_json_body),
         f'"{name}"',
     )
+    discriminator_attribute = []
+    if is_anchor:
+        discriminator_attribute.append(
+            discriminator_assignment,
+        )
     klass = Dataclass(
         name,
-        [
-            discriminator_assignment,
+        discriminator_attribute
+        + [
             layout_assignment,
             *fields_interface_params,
             fetch_method,
