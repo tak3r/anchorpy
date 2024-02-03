@@ -13,6 +13,7 @@ from anchorpy_core.idl import (
     IdlTypeOption,
     IdlTypeSimple,
     IdlTypeVec,
+    IdlTypeGeneric,
 )
 from pyheck import snake
 
@@ -122,6 +123,8 @@ def _py_type_from_idl(
         return "str"
     if ty == IdlTypeSimple.PublicKey:
         return "Pubkey"
+    if ty == IdlTypeGeneric("hashMap"):
+        return "{}"
     raise ValueError(f"Unrecognized type: {ty}")
 
 
@@ -175,6 +178,8 @@ def _layout_for_type(
             idl=idl, ty=ty.array[0], types_relative_imports=types_relative_imports
         )
         inner = f"{layout}[{ty.array[1]}]"
+    elif ty == IdlTypeGeneric("hashMap"):
+        inner = "borsh.HashMap"
     else:
         raise ValueError(f"Unrecognized type: {ty}")
 
@@ -277,6 +282,8 @@ def _field_to_encodable(
         IdlTypeSimple.Bytes,
     }:
         return f"{val_prefix}{ty_name}{val_suffix}"
+    if ty_type == IdlTypeGeneric("hashMap"):
+        return f"{val_prefix}{ty_name}{val_suffix}"  # todo: need to be tested
     raise ValueError(f"Unrecognized type: {ty_type}")
 
 
@@ -362,6 +369,8 @@ def _field_from_decoded(
         IdlTypeSimple.Bytes,
     }:
         return f"{val_prefix}{ty_name}"
+    if ty_type == IdlTypeGeneric("hashMap"):
+        return f"{val_prefix}{ty_name}"  # todo: need to be tested
     raise ValueError(f"Unrecognized type: {ty_type}")
 
 
@@ -505,6 +514,8 @@ def _field_to_json(
         IdlTypeSimple.String,
     }:
         return var_name
+    if ty_type == IdlTypeGeneric("hashMap"):
+        return var_name  # todo: need to be tested
     raise ValueError(f"Unrecognized type: {ty_type}")
 
 
@@ -545,6 +556,8 @@ def _idl_type_to_json_type(ty: IdlType, types_relative_imports: bool) -> str:
         return "list[int]"
     if ty in {IdlTypeSimple.String, IdlTypeSimple.PublicKey}:
         return "str"
+    if ty == IdlTypeGeneric("hashMap"):
+        return "{}"
     raise ValueError(f"Unrecognized type: {ty}")
 
 
@@ -641,4 +654,6 @@ def _field_from_json(
         IdlTypeSimple.String,
     }:
         return var_name
+    if ty_type == IdlTypeGeneric("hashMap"):
+        return "{}"  # todo: need to be tested
     raise ValueError(f"Unrecognized type: {ty_type}")

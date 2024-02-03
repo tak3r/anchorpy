@@ -21,7 +21,9 @@ from anchorpy_core.idl import (
     IdlTypeVec,
     EnumFields,
     EnumFieldsNamed,
-    IdlTypeGenericLenArray,
+    EnumFieldsTuple,
+    IdlErrorCode,
+    IdlTypeGeneric,
 )
 
 from borsh_construct import U8, CStruct, Vec
@@ -67,7 +69,27 @@ def _decode_idl_account(data: bytes) -> IdlProgramAccount:
 TypeDefs = Sequence[IdlTypeDefinition]
 
 
-def _from_json(raw: str) -> (Idl, {}):
+def _load_instructions_discriminants(raw: str) -> {}:
+    """Load instructions discriminants if given
+
+    Args:
+        raw: json string of the IDL content
+
+    Returns:
+        map of instructions name to each discriminant value
+    """
+    json_idl = json.loads(raw)
+    discriminants = {}
+
+    for ix in json_idl["instructions"]:
+        # handle non anchor discriminant
+        if "discriminant" in ix:
+            discriminants[ix["name"]] = hex(ix["discriminant"]["value"])
+
+    return discriminants
+
+
+def _from_json(raw: str) -> Idl:
     """Load json IDL for non anchor contract
 
     Args:
@@ -77,27 +99,24 @@ def _from_json(raw: str) -> (Idl, {}):
         IDL
     """
     json_idl = json.loads(raw)
-    instructions, discriminants = _resolve_instructions(json_idl)
     return (
         Idl(
             json_idl["version"],
             json_idl["name"],
             [],
             [],
-            instructions,
+            _resolve_instructions(json_idl),
             _resolve_accounts(json_idl),
             _resolve_types(json_idl),
             [],
-            [],
+            _resolv_errors(json_idl),
             metadata=json_idl["metadata"],
         ),
-        discriminants,
     )
 
 
-def _resolve_instructions(json_idl: {}) -> (Sequence[IdlTypeDefinition], {}):
+def _resolve_instructions(json_idl: {}) -> Sequence[IdlTypeDefinition]:
     instructions = []
-    discriminants = {}
 
     for ix in json_idl["instructions"]:
         accounts = []
@@ -130,14 +149,9 @@ def _resolve_instructions(json_idl: {}) -> (Sequence[IdlTypeDefinition], {}):
                     )
                 else:
                     args.append(IdlField(arg["name"], None, _resolve_idl_type(arg)))
-
-        # handle non anchor discriminant
-        if "discriminant" in ix:
-            discriminants[ix["name"]] = hex(ix["discriminant"]["value"])
-
         instructions.append(IdlInstruction(ix["name"], None, accounts, args, None))
 
-    return instructions, discriminants
+    return instructions
 
 
 def _resolve_accounts(json_idl: {}) -> Sequence[IdlTypeDefinition]:
@@ -183,26 +197,52 @@ def _resolve_types(json_idl: {}) -> Sequence[IdlTypeDefinition]:
             variants = []
             for v in t["type"]["variants"]:
                 if "fields" in v:
-                    fields = []
+                    fields_named = []
+                    fields_tuple = []
+
                     for f in v["fields"]:
-                        fields.append(IdlField(f["name"], None, _resolve_idl_type(f)))
-                    variants.append(IdlEnumVariant(v["name"], EnumFieldsNamed(fields)))
+                        if "name" in f:
+                            fields_named.append(
+                                IdlField(f["name"], None, _resolve_idl_type(f))
+                            )
+                        else:
+                            fields_tuple.append(_resolve_idl_type({"type": f}))
+
+                    if len(fields_named) > 0:
+                        variants.append(
+                            IdlEnumVariant(v["name"], EnumFieldsNamed(fields_named))
+                        )
+                    elif len(fields_tuple) > 0:
+                        variants.append(
+                            IdlEnumVariant(v["name"], EnumFieldsTuple(fields_tuple))
+                        )
                 else:
                     variants.append(IdlEnumVariant(v["name"]))
 
             ty = IdlTypeDefinitionTyEnum(variants)
         elif t["type"]["kind"] == "struct":
-            fields = []
+            fields_named = []
             for f in t["type"]["fields"]:
-                fields.append(IdlField(f["name"], None, _resolve_idl_type(f)))
+                fields_named.append(IdlField(f["name"], None, _resolve_idl_type(f)))
 
-            ty = IdlTypeDefinitionTyStruct(fields)
+            ty = IdlTypeDefinitionTyStruct(fields_named)
         else:
             print(f"unhandled type kind {t['type']['kind']}")
 
         types.append(IdlTypeDefinition(t["name"], None, ty))
 
     return types
+
+
+def _resolv_errors(json_idl: {}) -> Sequence[IdlErrorCode]:
+    errors = []
+    if "errors" not in json_idl:
+        return errors
+
+    for error in json_idl["errors"]:
+        errors.append(IdlErrorCode(error["code"], error["name"], error["msg"]))
+
+    return errors
 
 
 def _resolve_idl_type(input) -> IdlType:
@@ -221,9 +261,13 @@ def _resolve_idl_type(input) -> IdlType:
         ty = IdlTypeVec(_resolve_idl_type({"type": input["type"]["vec"]}))
     elif "defined" in input["type"]:
         ty = IdlTypeDefined(input["type"]["defined"])
+    elif "option" in input["type"]:
+        ty = IdlTypeOption(_resolve_idl_type({"type": input["type"]["option"]}))
+    elif "hashMap" in input["type"]:
+        ty = IdlTypeGeneric("hashMap")
     else:
         print(f"unhandle idl type: {input['type']}")
-        # hack due to unhandled hashmap
+        # hack to avoid crashing
         return IdlTypeSimple.String
 
     return ty

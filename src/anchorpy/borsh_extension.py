@@ -3,7 +3,7 @@ from dataclasses import asdict
 from keyword import kwlist
 from typing import Any, Dict, Type, TypeVar, cast
 
-from borsh_construct import U8, CStruct
+from borsh_construct import U8, U32, CStruct
 from construct import (
     Adapter,
     Bytes,
@@ -68,7 +68,7 @@ class COption(Adapter):
 
     def __init__(self, subcon: Construct) -> None:
         option_struct = CStruct(
-            self._discriminator_key / U8,
+            self._discriminator_key / U32,
             self._value_key
             / IfThenElse(
                 lambda this: this[self._discriminator_key] == 0,

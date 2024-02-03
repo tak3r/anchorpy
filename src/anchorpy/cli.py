@@ -14,7 +14,7 @@ from anchorpy.clientgen.errors import gen_errors
 from anchorpy.clientgen.instructions import gen_instructions
 from anchorpy.clientgen.program_id import gen_program_id
 from anchorpy.clientgen.types import gen_types
-from anchorpy.idl import _from_json
+from anchorpy.idl import _from_json, _load_instructions_discriminants
 from anchorpy.template import INIT_TESTS
 
 
@@ -109,14 +109,15 @@ def client_gen(
     ),
 ):
     """Generate Python client code from the specified anchor IDL."""
-    discriminants = {}
+    discriminants = _load_instructions_discriminants(idl.read_text())
     is_anchor = True
     try:
         idl_obj = Idl.from_json(idl.read_text())
     except:
         # non anchor idl
+        idl_obj = _from_json(idl.read_text())
+    if len(discriminants) > 0:
         is_anchor = False
-        idl_obj, discriminants = _from_json(idl.read_text())
     if program_id is None:
         idl_metadata = idl_obj.metadata
         address_from_idl = (

@@ -109,10 +109,10 @@ def gen_account_code(acc: IdlTypeDefinition, idl: Idl, is_anchor: bool) -> str:
     ]
 
     if is_anchor:
-        base_imports.append(
+        base_imports += [
             FromImport("anchorpy.coder.accounts", ["ACCOUNT_DISCRIMINATOR_SIZE"]),
             FromImport("anchorpy.error", ["AccountInvalidDiscriminator"]),
-        )
+        ]
     imports = (
         [*base_imports, FromImport("..", ["types"])] if idl.types else base_imports
     )
