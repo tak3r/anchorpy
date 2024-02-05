@@ -110,12 +110,12 @@ def client_gen(
 ):
     """Generate Python client code from the specified anchor IDL."""
     discriminants = _load_instructions_discriminants(idl.read_text())
-    is_anchor = True
     try:
         idl_obj = Idl.from_json(idl.read_text())
     except:
         # non anchor idl
         idl_obj = _from_json(idl.read_text())
+    is_anchor = True
     if len(discriminants) > 0:
         is_anchor = False
     if program_id is None:

@@ -23,7 +23,7 @@ from anchorpy_core.idl import (
     EnumFieldsNamed,
     EnumFieldsTuple,
     IdlErrorCode,
-    IdlTypeGeneric,
+    IdlTypeGenericLenArray,
 )
 
 from borsh_construct import U8, CStruct, Vec
@@ -99,19 +99,17 @@ def _from_json(raw: str) -> Idl:
         IDL
     """
     json_idl = json.loads(raw)
-    return (
-        Idl(
-            json_idl["version"],
-            json_idl["name"],
-            [],
-            [],
-            _resolve_instructions(json_idl),
-            _resolve_accounts(json_idl),
-            _resolve_types(json_idl),
-            [],
-            _resolv_errors(json_idl),
-            metadata=json_idl["metadata"],
-        ),
+    return Idl(
+        json_idl["version"],
+        json_idl["name"],
+        [],
+        [],
+        _resolve_instructions(json_idl),
+        _resolve_accounts(json_idl),
+        _resolve_types(json_idl),
+        [],
+        _resolve_errors(json_idl),
+        metadata=json_idl["metadata"],
     )
 
 
@@ -234,7 +232,7 @@ def _resolve_types(json_idl: {}) -> Sequence[IdlTypeDefinition]:
     return types
 
 
-def _resolv_errors(json_idl: {}) -> Sequence[IdlErrorCode]:
+def _resolve_errors(json_idl: {}) -> Sequence[IdlErrorCode]:
     errors = []
     if "errors" not in json_idl:
         return errors
@@ -264,7 +262,9 @@ def _resolve_idl_type(input) -> IdlType:
     elif "option" in input["type"]:
         ty = IdlTypeOption(_resolve_idl_type({"type": input["type"]["option"]}))
     elif "hashMap" in input["type"]:
-        ty = IdlTypeGeneric("hashMap")
+        ty = IdlTypeGenericLenArray(
+            (_resolve_idl_type({"type": input["type"]["hashMap"][1]}), "hashMap")
+        )
     else:
         print(f"unhandle idl type: {input['type']}")
         # hack to avoid crashing
