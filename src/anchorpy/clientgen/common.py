@@ -47,6 +47,10 @@ def _kind_interface_name(type_name: str) -> str:
     return f"{type_name}Kind"
 
 
+def _layout_interface_name(type_name: str) -> str:
+    return f"{type_name}Layout"
+
+
 def _json_interface_name(type_name: str) -> str:
     return f"{type_name}JSON"
 

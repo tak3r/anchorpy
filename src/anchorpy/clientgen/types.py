@@ -36,6 +36,7 @@ from anchorpy.clientgen.common import (
     _json_interface_name,
     _kind_interface_name,
     _layout_for_type,
+    _layout_interface_name,
     _py_type_from_idl,
     _sanitize,
     _value_interface_name,
@@ -89,6 +90,7 @@ def gen_index_code(idl: Idl) -> str:
             import_members = [
                 _kind_interface_name(ty.name),
                 _json_interface_name(ty.name),
+                _layout_interface_name(ty.name),
             ]
         imports.append(
             FromImport(
@@ -617,10 +619,21 @@ def gen_enum(idl: Idl, name: str, variants: list[IdlEnumVariant]) -> Collection:
         "layout",
         f"EnumForCodegen({formatted_cstructs})",
     )
-    json_variants = Union(json_variants_members)
-    type_variants = Union(type_variants_members)
+
+    json_variants = (
+        Union(json_variants_members)
+        if len(json_variants_members) > 1
+        else json_variants_members[0]
+    )
+    type_variants = (
+        Union(type_variants_members)
+        if len(type_variants_members) > 1
+        else type_variants_members[0]
+    )
     kind_type_alias = Assign(_kind_interface_name(name), type_variants)
     json_type_alias = Assign(_json_interface_name(name), json_variants)
+    layout_var_alias = Assign(_layout_interface_name(name), "layout")
+
     return Collection(
         [
             *imports,
@@ -633,5 +646,6 @@ def gen_enum(idl: Idl, name: str, variants: list[IdlEnumVariant]) -> Collection:
             from_decoded_fn,
             from_json_fn,
             layout_assignment,
+            layout_var_alias,
         ]
     )
