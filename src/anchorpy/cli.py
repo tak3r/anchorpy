@@ -14,7 +14,11 @@ from anchorpy.clientgen.errors import gen_errors
 from anchorpy.clientgen.instructions import gen_instructions
 from anchorpy.clientgen.program_id import gen_program_id
 from anchorpy.clientgen.types import gen_types
-from anchorpy.idl import _from_json, _load_instructions_discriminants
+from anchorpy.idl import (
+    _fix_instructions_discriminants,
+    _from_json,
+    _load_instructions_discriminants,
+)
 from anchorpy.template import INIT_TESTS
 
 
@@ -147,6 +151,16 @@ def client_gen(
     gen_types(idl_obj, out)
     typer.echo("generating accounts...")
     gen_accounts(idl_obj, out, is_anchor)
+
+
+@app.command()
+def fix_idl(
+    idl: Path = typer.Argument(..., help="Anchor IDL file path"),
+    out: Path = typer.Argument(default="idl_fixed.json", help="Output filename."),
+):
+    """Fix instruction discriminants for non anchor IDL."""
+    idl_raw = _fix_instructions_discriminants(idl.read_text())
+    out.write_text(idl_raw)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 """Contains code for parsing the IDL file."""
+
 from typing import Sequence, TypedDict
 import json
 
@@ -67,6 +68,25 @@ def _decode_idl_account(data: bytes) -> IdlProgramAccount:
 
 
 TypeDefs = Sequence[IdlTypeDefinition]
+
+
+def _fix_instructions_discriminants(raw: str) -> str:
+    """Fix json IDL instruction discriminant for non anchor contract
+
+    Args:
+        raw: json string of the IDL content
+
+    Returns:
+        Fixed version
+    """
+    json_idl = json.loads(raw)
+
+    index = 0
+    for ix in json_idl["instructions"]:
+        ix["discriminant"] = {"type": "u8", "value": index}
+        index += 1
+
+    return json.dumps(json_idl, indent=2)
 
 
 def _load_instructions_discriminants(raw: str) -> {}:
