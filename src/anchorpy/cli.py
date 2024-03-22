@@ -15,6 +15,7 @@ from anchorpy.clientgen.instructions import gen_instructions
 from anchorpy.clientgen.program_id import gen_program_id
 from anchorpy.clientgen.types import gen_types
 from anchorpy.idl import (
+    _fix_error_msg,
     _fix_instructions_discriminants,
     _from_json,
     _load_instructions_discriminants,
@@ -158,8 +159,12 @@ def fix_idl(
     idl: Path = typer.Argument(..., help="Anchor IDL file path"),
     out: Path = typer.Argument(default="idl_fixed.json", help="Output filename."),
 ):
-    """Fix instruction discriminants for non anchor IDL."""
+    """
+    1. Fix instruction discriminants for non anchor IDL.
+    2. Fix multiline error message
+    """
     idl_raw = _fix_instructions_discriminants(idl.read_text())
+    idl_raw = _fix_error_msg(idl_raw)
     out.write_text(idl_raw)
 
 

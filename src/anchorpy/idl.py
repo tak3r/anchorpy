@@ -2,6 +2,7 @@
 
 from typing import Sequence, TypedDict
 import json
+import re
 
 import solders.pubkey
 from anchorpy_core.idl import (
@@ -70,6 +71,25 @@ def _decode_idl_account(data: bytes) -> IdlProgramAccount:
 TypeDefs = Sequence[IdlTypeDefinition]
 
 
+def _fix_error_msg(raw: str) -> str:
+    """Fix json IDL multiline error message
+
+    Args:
+        raw: json string of the IDL content
+
+    Returns:
+        Fixed version
+    """
+    json_idl = json.loads(raw)
+
+    for err in json_idl["errors"]:
+        match = re.search("\n\s*", err["msg"])
+        if match is not None:
+            err["msg"] = err["msg"].replace(match.group(0), " ")
+
+    return json.dumps(json_idl, indent=2)
+
+
 def _fix_instructions_discriminants(raw: str) -> str:
     """Fix json IDL instruction discriminant for non anchor contract
 
@@ -82,9 +102,34 @@ def _fix_instructions_discriminants(raw: str) -> str:
     json_idl = json.loads(raw)
 
     index = 0
+    sub_index = 0
+    parent_extension = ""
     for ix in json_idl["instructions"]:
-        ix["discriminant"] = {"type": "u8", "value": index}
-        index += 1
+        match = re.match(r"^(?P<ext>.+Extension)(?P<name>.+)", ix["name"])
+        if match is not None:
+            if parent_extension != "" and parent_extension != match.group("ext"):
+                # different ext from prev inst
+                index += 1
+                sub_index = 0
+            parent_extension = match.group("ext")
+            ix["discriminant"] = {
+                "type": "u16",
+                "value": int.from_bytes(
+                    int.to_bytes(index, 1, "big") + int.to_bytes(sub_index, 1, "big"),
+                    "big",
+                ),
+            }
+            print(
+                f"index: {index}, sub: {sub_index}, value: {ix['discriminant']['value']}"
+            )
+            sub_index += 1
+        else:
+            if parent_extension != "":
+                index += 1
+                parent_extension = ""
+                sub_index = 0
+            ix["discriminant"] = {"type": "u8", "value": index}
+            index += 1
 
     return json.dumps(json_idl, indent=2)
 
