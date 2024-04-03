@@ -1,4 +1,5 @@
 """Extensions to the Borsh spec for Solana-specific types."""
+
 from dataclasses import asdict
 from keyword import kwlist
 from typing import Any, Dict, Type, TypeVar, cast
@@ -68,11 +69,11 @@ class COption(Adapter):
 
     def __init__(self, subcon: Construct) -> None:
         option_struct = CStruct(
-            self._discriminator_key / U32,
+            self._discriminator_key / U8,
             self._value_key
             / IfThenElse(
                 lambda this: this[self._discriminator_key] == 0,
-                Padding(subcon.sizeof()),
+                Padding(0),
                 subcon,
             ),
         )
