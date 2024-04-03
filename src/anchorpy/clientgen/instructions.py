@@ -27,6 +27,7 @@ from pyheck import shouty_snake, snake, upper_camel
 from anchorpy.clientgen.common import (
     _field_to_encodable,
     _layout_for_type,
+    _layout_interface_name,
     _py_type_from_idl,
     _sanitize,
 )
@@ -79,6 +80,9 @@ def gen_index_code(idl: Idl) -> str:
         import_members: list[str] = [ix_name]
         if ix.args:
             import_members.append(_args_interface_name(ix_name_snake_unsanitized))
+            import_members.append(
+                _layout_interface_name(upper_camel(ix_name_snake_unsanitized))
+            )
         if ix.accounts:
             import_members.append(_accounts_interface_name(ix_name_snake_unsanitized))
         if import_members:
@@ -296,7 +300,10 @@ def gen_instructions_code(
                 TypedDict(args_interface_name, args_interface_params)
             ]
             layout_val = f"borsh.CStruct({','.join(layout_items)})"
-            layout_assignment_container = [Assign("layout", layout_val)]
+            layout_assignment_container = [
+                Assign("layout", layout_val),
+                Assign(_layout_interface_name(upper_camel(ix.name)), "layout"),
+            ]
             args_container = [TypedParam("args", args_interface_name)]
             encoded_args_val = f"layout.build({StrDict(encoded_args_entries)})"
         else:
